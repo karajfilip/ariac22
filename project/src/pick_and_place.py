@@ -146,6 +146,7 @@ class RobotMover:
         joint_point = self.inverse_kin.inverse_kinematics_kitting_arm(position, prev_joints)
         joint_point = [joint_point[3], joint_point[0], joint_point[2], joint_point[1], joint_point[4], joint_point[5], joint_point[6]]
         joint_points = self.inverse_kin.fix_joints_kitting(joint_point, prev_joints)
+        #TODO FIX JOINT POINTS
 
         point = JointTrajectoryPoint()
         point.positions = joint_point
@@ -154,9 +155,9 @@ class RobotMover:
 
     def add_point_gantry(self, position, joints=0, used_time=0, point_time=1, prev_joints=None):
         joint_point = self.inverse_kin.inverse_kinematics_gantry(position, target_group=joints, start_joints=prev_joints)
+        #arm_joints = self.inverse_kin.fix_joints_gantry(joint_point, prev_joints)
         arm_joints = joint_point[3:-1]
         torso_joints = joint_point[0:3]
-        del arm_joints[-1]
         del arm_joints[-1]
 
         point_arm = JointTrajectoryPoint()
@@ -337,11 +338,9 @@ class RobotMover:
         print("KITTING_MOVER: Sent trajectory")
         while not self.check_kitting_position(end_pos, tolerance=0.015):
             rospy.sleep(0.2)
-            if not self.inverse_kin.is_object_attached_kitting().attached:
-                return False
         self.inverse_kin.deactivate_kitting_gripper()
         print("KITTING_MOVER: Let go")
-        return True
+        return
 
     # Gantry ima dodatnu varijablu joints, koja determinira koji dio gantry se treba pomaknuti. Za micanje samo baze koristi path_planner.py!!!
     # 0 - Cijeli gantry
@@ -350,7 +349,7 @@ class RobotMover:
     # 0 - Nemoj dici ruku
     # 1 - Digni ruku prije bilo cega drugog
     # Tray pickup - dizem li tray? 0 - ne
-    def pickup_gantry(self, position, joints=0, liftup=0, tray_pickup = 0):
+    def pickup_gantry(self, position, joints=0, liftup=0, tray_pickup = 0, object_name = None):
         print("GANTRY_MOVER: Pickup from: " + str(position))
         self.gantry_pickedup = False
         used_time = 0
@@ -360,7 +359,6 @@ class RobotMover:
         above_end[2] = above_end[2] + 0.3
 
         if liftup == 1:
-            print("lift1")
             current_pos = self.get_pos_gantry()
             current_pos[2] = current_pos[2] + 0.3
             current_pos.append(position[3])
@@ -369,7 +367,6 @@ class RobotMover:
             pa1, pt1, used_time, p1f = self.add_point_gantry(current_pos, joints, used_time, point_time=0.5, prev_joints=None)
             pa2, pt2, used_time, p2f = self.add_point_gantry(above_end, joints, used_time, point_time=1.5, prev_joints=p1f)
         elif liftup == 0:
-            print("lift0")
             used_time -= 0.5
             pa2, pt2, used_time, p2f = self.add_point_gantry(above_end, joints, used_time, point_time=1.5, prev_joints=None)
 
@@ -404,11 +401,18 @@ class RobotMover:
             above_end[2] -= 0.07
             pa4, pt4, used_time, p4f = self.add_point_gantry(above_end, joints, used_time, point_time=3, prev_joints=p3f)
 
+        elif object_name is not None:
+            if 'pump' in object_name:
+                above_end[2] -= 0.15
+                pa3, pt3, used_time, p3f = self.add_point_gantry(above_end, joints, used_time, point_time=0.5, prev_joints=None)
+                above_end[2] -= 0.09
+                pa4, pt4, used_time, p4f = self.add_point_gantry(above_end, joints, used_time, point_time=5, prev_joints=p3f)
+
         else:
             above_end[2] -= 0.15
             pa3, pt3, used_time, p3f = self.add_point_gantry(above_end, joints, used_time, point_time=0.5, prev_joints=None)
-            above_end[2] -= 0.1
-            pa4, pt4, used_time, p4f = self.add_point_gantry(above_end, joints, used_time, point_time=3, prev_joints=p3f)
+            above_end[2] -= 0.12
+            pa4, pt4, used_time, p4f = self.add_point_gantry(above_end, joints, used_time, point_time=5, prev_joints=p3f)
 
 
         if joints == 0:
@@ -425,7 +429,7 @@ class RobotMover:
 
         return  
 
-    def place_gantry(self, position, joints=0, liftup=1):
+    def place_gantry(self, position, joints=0, liftup=1, tolerance=0.04):
         print("GANTRY_MOVER: Placing at: " + str(position))
         self.gantry_pickedup = False
         used_time = 0
@@ -469,11 +473,88 @@ class RobotMover:
         self.gantry_cmd.publish(ta)
         print("GANTRY_MOVER: Sent first")
 
-
-        while not self.check_gantry_position(above_end):
+        while not self.check_gantry_position(above_end, tolerance=tolerance):
             #print("trying to reach end position")
             rospy.sleep(0.1)
         self.inverse_kin.deactivate_gantry_gripper()
+        print("GANTRY_MOVER: Let go")
+        return
+
+    def assemble_place_gantry(self, position, object_name, joints=0, liftup=1, tolerance=0.01):
+        print("GANTRY_MOVER: Placing at: " + str(position))
+        self.gantry_pickedup = False
+        used_time = 0
+
+        above_end = position
+        if 'sensor' in object_name:
+            above_end[0] = above_end[0] + 0.2
+        else:
+            above_end[2] = above_end[2] + 0.22
+
+        if liftup == 1:
+            current_pos = self.get_pos_gantry()
+            current_pos[2] = current_pos[2] + 0.15
+            current_pos.append(position[3])
+            current_pos.append(position[4])
+            current_pos.append(position[5])
+            pa1, pt1, used_time, p1f = self.add_point_gantry(current_pos, joints, used_time, point_time=0.5,
+                                                             prev_joints=None)
+            pa2, pt2, used_time, p2f = self.add_point_gantry(above_end, joints, used_time, point_time=1.5,
+                                                             prev_joints=p1f)
+        else:
+            used_time -= 0.5
+            pa2, pt2, used_time, p2f = self.add_point_gantry(above_end, joints, used_time, point_time=2,
+                                                             prev_joints=None)
+
+        if 'sensor' in object_name:
+            above_end[0] = above_end[0] - 0.1
+        else:
+            above_end[2] = above_end[2] - 0.1
+        pa3, pt3, used_time, p3f = self.add_point_gantry(above_end, joints, used_time, point_time=2.5,
+                                                         prev_joints=p2f)
+
+
+        if 'sensor' in object_name:
+            above_end[0] = above_end[0] - 0.1
+        else:
+            above_end[2] = above_end[2] - 0.12
+
+        pa4, pt4, used_time, p3f = self.add_point_gantry(above_end, joints, used_time, point_time=3.5,
+                                                         prev_joints=p3f)
+
+        if joints == 0:
+            if liftup == 0:
+                ta, tt = self.make_traj_gantry([pa2, pa3, pa4], [pt2, pt3, pt4])
+            elif liftup == 1:
+                ta, tt = self.make_traj_gantry([pa1, pa2, pa3, pa4], [pt1, pt2, pt3, pt4])
+        elif joints == 1:
+            if liftup == 0:
+                ta, tt = self.make_traj_gantry([pa2, pa3, pa4])
+            elif liftup == 1:
+                ta, tt = self.make_traj_gantry([pa1, pa2, pa3, pa4])
+
+        # Reci robotu da dode iznad objekta
+        if joints == 0:
+            self.gantry_torso_cmd.publish(tt)
+        self.gantry_cmd.publish(ta)
+        print("GANTRY_MOVER: Sent first")
+
+        i = 85 # wait for 8.5 seconds
+        while not self.check_gantry_position(above_end, tolerance=tolerance):
+            rospy.sleep(0.1)
+            i -= 1
+            if i == 0: # if not placed within 8.5 seconds, ABORT
+                break
+        self.inverse_kin.deactivate_gantry_gripper()
+
+        if 'regulator' in object_name:
+            self.move_directly_gantry([above_end[0] + 0.5, above_end[1], above_end[2] + 0.15, -math.pi/2, math.pi/2, 0])
+        elif 'sensor' in object_name:
+            self.move_directly_gantry([above_end[0], above_end[1] - 0.35, above_end[2], 0, 0, math.pi/2])
+            self.move_directly_gantry([above_end[0], above_end[1] - 0.35, above_end[2] + 0.2, 0, 0, math.pi/2])
+        elif 'pump' in object_name or 'battery' in object_name:
+            self.move_directly_gantry([above_end[0] + 0.1, above_end[1], above_end[2] + 0.15, 0, math.pi/2, 0])
+
         print("GANTRY_MOVER: Let go")
         return
 
@@ -513,14 +594,49 @@ class RobotMover:
         print("GANTRY_MOVER: Sent")
         return
 
-    def assemble_gantry(self, station_name, object_name, joints=0):
+    # Funkcija za assembleanje u briefcase
+    def assemble_gantry(self, station_name, object_name, joints=0, z_rot = 0, offset = None):
+        base_frame = []
+        transf = []
+
         if station_name == 'as1':
-            base_frame = [-7.22, 3.09, 1.2]
+            base_frame = [-7.22, 3.09, 1.31]
         elif station_name == 'as2':
-            base_frame = [-12.22, 3.09, 1.2]
+            base_frame = [-12.22, 3.09, 1.31]
+        elif station_name == 'as3':
+            base_frame = [-7.22, -2.91, 1.31]
+        elif station_name == 'as4':
+            base_frame = [-12.22 -2.91, 1.31]
+
+        rot = [0, math.pi/2, 0]
+        if "sensor" in object_name:
+            transf = [0.382, 0.118, -0.002]
+            rot=[0, -0.02, math.pi/2]
+        elif 'regulator' in object_name:
+            transf = [-0.217 + 0.043, -0.1532 - 0.0133, 0.108]
+            rot = [-math.pi/2, math.pi, 0]
+        elif 'battery' in object_name:
+            transf = [-0.033465, 0.174845, 0.06]
+            rot = [0, math.pi/2, math.pi/2]
+        elif 'pump' in object_name:
+            transf = [0.033085, -0.152835, 0.045]
+            rot = [0, math.pi/2, math.pi/2]
+
+        pos_place = []
+        if offset is None:
+            pos_place.append(base_frame[0] + transf[0])
+            pos_place.append(base_frame[1] + transf[1])
+            pos_place.append(base_frame[2] + transf[2])
+        else:
+            pos_place.append(base_frame[0] + transf[0] - offset[0])
+            pos_place.append(base_frame[1] + transf[1] - offset[1])
+            pos_place.append(base_frame[2] + transf[2])
+        pos_place = pos_place + rot
+        #return pos_place
+
+        self.assemble_place_gantry(pos_place, joints=joints, tolerance=0.004, liftup=0, object_name=object_name)
+
         return
-
-
 
     # Funkcija za pokupljavanje sa trake pomocu kitting robota. Pozovi i on ide na predmet odredenog indexa (default 0)
     def pickup_from_track(self, pose_array_i=0):
@@ -680,8 +796,16 @@ class RobotMover:
 
 #rospy.init_node("roboter")
 #rm = RobotMover()
-#while not rm.kitting_pickedup:
+#pi = math.pi
+#rospy.sleep(0.5)
+#rm.move_directly_gantry([-11.75, 3.2079999999999997, 1.3165, 0, 0, 1.5707963267948966], joints=1)
+#print(rm.assemble_gantry('as2', 'battery', joints=0))
+
+
+#rm.assemble_gantry('as2', 'pump', joints=0)
+#while not rm.gantry_pickedup:
 #    rospy.sleep(0.2)
+#rm.move_directly_gantry([-3.415, 0.607, 0.9, 0, pi/2, 0], joints=1)
 #rm.place_kitting([-2.265,1.37 , 0.8 , 0 , math.pi/2 , 0])
 
 #while rm.watching_kitting:
@@ -693,5 +817,4 @@ class RobotMover:
 
 #rm.flip_part_kitting([-1.79, 2.465, 0.774, 0, math.pi/2, 0])
 #rospy.spin()
-
 
