@@ -202,6 +202,30 @@ class RobotMover:
 
         return trajectory_arm, trajectory_torso
 
+    ### Moving torso
+    def make_traj_torso(self, points_torso):
+        trajectory_torso = JointTrajectory()
+        trajectory_torso.joint_names = ["small_long_joint", "torso_rail_joint", "torso_base_main_joint"]
+        trajectory_torso.header.stamp = rospy.Time.now()
+        for point in points_torso:
+            trajectory_torso.points.append(point)
+        return trajectory_torso
+
+    def move_torso(self, position):
+
+        self.torso_moved = False
+
+        gantry_pose = []
+        gantry_pose.append(position[0])
+        gantry_pose.append(position[1])
+        gantry_pose.append(position[2])
+        point = JointTrajectoryPoint()
+        point.positions = gantry_pose
+        point.time_from_start = rospy.Duration(1.2)
+        trajectory_torso = self.make_traj_torso([point])
+        self.gantry_torso_cmd.publish(trajectory_torso)
+        rospy.sleep(1.25)
+
     # Dohvaca trenutnu poziciju robota iz direktne kinematike
     # NE KORISTITI SAMO DIREKTNU JER POSTOJI SANSA DA CE FAILAT PA SE MORA POZVATI VISE PUTA DOK NE PRORADI
     def get_pos_kitting(self):
@@ -405,7 +429,7 @@ class RobotMover:
             if 'pump' in object_name:
                 above_end[2] -= 0.15
                 pa3, pt3, used_time, p3f = self.add_point_gantry(above_end, joints, used_time, point_time=0.5, prev_joints=None)
-                above_end[2] -= 0.09
+                above_end[2] -= 0.085
                 pa4, pt4, used_time, p4f = self.add_point_gantry(above_end, joints, used_time, point_time=5, prev_joints=p3f)
 
         else:
@@ -551,7 +575,7 @@ class RobotMover:
             self.move_directly_gantry([above_end[0] + 0.5, above_end[1], above_end[2] + 0.15, -math.pi/2, math.pi/2, 0])
         elif 'sensor' in object_name:
             self.move_directly_gantry([above_end[0], above_end[1] - 0.35, above_end[2], 0, 0, math.pi/2])
-            self.move_directly_gantry([above_end[0], above_end[1] - 0.35, above_end[2] + 0.2, 0, 0, math.pi/2])
+            self.move_directly_gantry([above_end[0], above_end[1] - 0.35, above_end[2] + 0.2, 0, math.pi/2, 0])
         elif 'pump' in object_name or 'battery' in object_name:
             self.move_directly_gantry([above_end[0] + 0.1, above_end[1], above_end[2] + 0.15, 0, math.pi/2, 0])
 
@@ -595,7 +619,7 @@ class RobotMover:
         return
 
     # Funkcija za assembleanje u briefcase
-    def assemble_gantry(self, station_name, object_name, joints=0, z_rot = 0, offset = None):
+    def assemble_gantry(self, station_name, object_name, joints=0, z_rot = 0, offset = None, multiplier = 1):
         base_frame = []
         transf = []
 
@@ -610,10 +634,10 @@ class RobotMover:
 
         rot = [0, math.pi/2, 0]
         if "sensor" in object_name:
-            transf = [0.382, 0.118, -0.002]
-            rot=[0, -0.02, math.pi/2]
+            transf = [0.382, 0.12, -0.002]
+            rot=[0, 0.02, math.pi/2]
         elif 'regulator' in object_name:
-            transf = [-0.217 + 0.043, -0.1532 - 0.0133, 0.108]
+            transf = [-0.217 + 0.037, -0.1532 - 0.013, 0.108]
             rot = [-math.pi/2, math.pi, 0]
         elif 'battery' in object_name:
             transf = [-0.033465, 0.174845, 0.06]

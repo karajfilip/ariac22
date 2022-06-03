@@ -346,10 +346,3 @@ class Actuators():
         except rospy.ServiceException as exc:
             print(exc)
         return list(resp.solution.joint_state.position)
-
-if __name__ == '__main__':
-    #rospy.init_node('ActuatorsTest')
-    try:
-        node = Actuators()
-    except Exception as e:
-        print(e)

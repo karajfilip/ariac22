@@ -2,15 +2,9 @@ import rospy
 import smach
 from geometry_msgs.msg import Pose, PoseArray
 from math import pi
-from nist_assembly import AssemblyPart
 from nist_gear.msg import LogicalCameraImage
-
-# BRISI
 from trajectory_msgs.msg import JointTrajectory
 from trajectory_msgs.msg import JointTrajectoryPoint
-from control_msgs.msg import JointTrajectoryControllerState
-# DO TUD
-
 
 counter = 0
 
@@ -34,7 +28,6 @@ class CheckGripper(smach.State):
         self.act = actuators
 
     def execute(self, ud):
-        print(ud.task.shipment_type)
         gripper = self.act.gripper_type
         if str(gripper) !=  'gripper_part':
             ud.gripper = 'gripper_tray'
@@ -43,13 +36,23 @@ class CheckGripper(smach.State):
             return 'next'
 
 class SendGantry(smach.State):
-    def __init__(self, gantryplanner, processmgmt, assembly, outcomes=['arrived'], input_keys=['task']):
+    def __init__(self, gantryplanner, processmgmt, assembly, sensors, outcomes=['arrived'], input_keys=['task']):
         smach.State.__init__(self, outcomes, input_keys)
         self.gp = gantryplanner
         self.node = processmgmt
         self.ass = assembly
+        self.sen = sensors
 
     def execute(self, ud):
+        if (str(ud.task.station_id) == "as2"):
+            while self.sen.bb1:
+                rospy.logwarn("Human obstacle at as2")
+                rospy.sleep(0.2)
+        if (str(ud.task.station_id) == "as4"):
+            while self.sen.bb2:
+                rospy.logwarn("Human obstacle at as4")
+                rospy.sleep(0.2)
+
         self.gp.move(ud.task.station_id)
         while self.gp.checking_position:
             rospy.sleep(0.2)
@@ -61,11 +64,11 @@ class SubmitAssemblyShipment(smach.State):
         self.node = processmgmt
     
     def execute(self, ud):
-        self.node.submit_assembly_shipment(ud.task.station_id)
+        self.node.submit_assembly_shipment(ud.task.station_id, ud.task.shipment_type)
         return 'success'
 
 class FindPartOnTray(smach.State):
-    def __init__(self, actuators, processmgmt, sensors, outcomes=['found'], input_keys=['part', 'kittingtask'], output_keys=['partcurrentposition']):
+    def __init__(self, actuators, processmgmt, sensors, outcomes=['found', 'noFound'], input_keys=['part', 'kittingtask'], output_keys=['partcurrentposition']):
         smach.State.__init__(self, outcomes, input_keys, output_keys)
         self.act = actuators
         self.node = processmgmt
@@ -160,7 +163,7 @@ class FindPartOnTray(smach.State):
             #     while not self.node.get_position_AGV("agv4") == "as4":
             #         rospy.sleep(0.2)
 
-            return 'found' 
+            return 'noFound'
 
 class GantryMovePart(smach.State):
     def __init__(self, robotmover, sensors, processmgmt, assembly, gantryplanner, act, outcomes=['moved'], input_keys=['partcurrentposition', 'part', 'task']):
@@ -175,34 +178,56 @@ class GantryMovePart(smach.State):
     def execute(self, ud):
         global counter
 
+        # -- Logika za orijentaciju i pronalazak agv-a
+        gantry_orientation = "right"
+        for i in range(1, 5):
+            if self.node.get_position_AGV('agv' + str(i)) == ud.task.station_id:
+                pose_tray = self.sen.tf_transform(str("kit_tray_" + str(i)))
 
-        #if 'sensor' not in ud.part.type:
-        #    return 'moved'
-        # TORSO NA [-8.26, 0, -3.78]
-        # A ONDA NA [-9 , 1.57, -3.08]
+        if (str(ud.task.station_id) == "as1"):
+            if (self.node.get_position_AGV("agv1") == "as1"):
+                gantry_orientation = "right"
+            else:
+                gantry_orientation = "left"
+        if (str(ud.task.station_id) == "as2"):
+            if (self.node.get_position_AGV("agv1") == "as2"):
+                gantry_orientation = "right"
+            else:
+                gantry_orientation = "left"
+        if (str(ud.task.station_id) == "as3"):
+            if (self.node.get_position_AGV("agv3") == "as3"):
+                gantry_orientation = "right"
+            else:
+                gantry_orientation = "left"
+        if (str(ud.task.station_id) == "as4"):
+            if (self.node.get_position_AGV("agv3") == "as4"):
+                gantry_orientation = "right"
+            else:
+                gantry_orientation = "left"
 
-        # Priblizi agvu
-        move_to = JointTrajectory()
-        move_to.header.stamp = rospy.Time.now()
-        move_to.joint_names = ["small_long_joint", "torso_base_main_joint", "torso_rail_joint"]
-        point = JointTrajectoryPoint()
-        point.positions = [-8.26, pi, -2.5]
-        point.time_from_start = rospy.Duration(1)
-
-        point2 = JointTrajectoryPoint()
-        point2.positions = [-8.26, pi, -2.1]
-        point2.time_from_start = rospy.Duration(2)
-
-        move_to.points.append(point)
-        move_to.points.append(point2)
-        self.gp.trajectory_publisher.publish(move_to)
-
-        rospy.sleep(2.2)
+        if gantry_orientation == "right":
+            multiplier = -1
+        else:
+            multiplier = 1
 
         # koji part???
-        parts = self.node.filipov_process_assembly_shipment(self.node.orders[0].assembly_shipments[0])
-        elem=parts[counter]
-        print(ud.partcurrentposition)
+        #parts = self.node.filipov_process_assembly_shipment(self.node.orders[0].assembly_shipments[0])
+        #elem=parts[counter]
+
+        # -- Kretanje gantrya do AGV-a
+        gantry_pose = self.act.gantry_torso_state
+
+        # spusti torso po x osi
+        self.rm.move_torso([gantry_pose.desired.positions[0] + 0.45, gantry_pose.desired.positions[1], pi / 2])
+        # ovisno o tome koji je agv pomakni torso blize njemu
+        gantry_pose = self.act.gantry_torso_state
+        if (gantry_orientation == "right"):
+            self.rm.move_torso([gantry_pose.desired.positions[0], gantry_pose.desired.positions[1], 0.0])
+            self.rm.move_torso([gantry_pose.desired.positions[0], gantry_pose.desired.positions[1] - 0.9, 0.0])
+        else:
+            self.rm.move_torso([gantry_pose.desired.positions[0], gantry_pose.desired.positions[1], pi])
+            self.rm.move_torso([gantry_pose.desired.positions[0], gantry_pose.desired.positions[1] + 0.9, pi])
+        print("Dosao do agv")
 
         # Pickupaj part!
         if 'pump' in ud.part.type:
@@ -222,45 +247,47 @@ class GantryMovePart(smach.State):
         self.rm.move_directly_gantry([ud.partcurrentposition.x, ud.partcurrentposition.y, ud.partcurrentposition.z + 0.8, 0, pi/2, 0], 1)
         rospy.sleep(1.5)
         if 'regulator' in ud.part.type:
-            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - 0.5, ud.partcurrentposition.z + 0.75, 0, pi, pi/2], 1)
+            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - (0.5 * multiplier), ud.partcurrentposition.z + 0.75, 0, pi, pi/2 * multiplier], 1)
             rospy.sleep(1.5)
-            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - 0.5, ud.partcurrentposition.z + 0.75, -pi/2, pi, pi/2], 1)
+            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - (0.3 * multiplier), ud.partcurrentposition.z + 0.75, -pi/2, pi, pi/2  * multiplier], 1)
         elif 'sensor' in ud.part.type:
-            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - 0.5, ud.partcurrentposition.z + 0.75, pi/2, 0, pi/2], 1)
+            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - (0.5 * multiplier), ud.partcurrentposition.z + 0.75, pi/2, 0, pi/2 * multiplier], 1)
             rospy.sleep(1.5)
-            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - 0.3, ud.partcurrentposition.z + 0.75, 0, 0, pi], 1)
+            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - (0.3 * multiplier), ud.partcurrentposition.z + 0.75, 0, pi/2 * (multiplier - 1), pi * multiplier], 1)
         else:
-            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - 0.5, ud.partcurrentposition.z + 0.75, 0, pi/2, 0], 1)
+            self.rm.move_directly_gantry([ud.partcurrentposition.x + 0.2, ud.partcurrentposition.y - (0.5 * multiplier), ud.partcurrentposition.z + 0.75, 0, pi/2, 0], 1)
         rospy.sleep(1.2)
 
-        # Pomakni se do kofera
-        move_to = JointTrajectory()
-        move_to.header.stamp = rospy.Time.now()
-        move_to.joint_names = ["small_long_joint", "torso_base_main_joint", "torso_rail_joint"]
-        point = JointTrajectoryPoint()
-        point.positions = [-8.26 , 1.57, -2.9]
-        point.time_from_start = rospy.Duration(1.5)
-
-        point2 = JointTrajectoryPoint()
-        if 'sensor' in ud.part.type:
-            point2.positions = [ -8.55, 1.57, -2.9]
+        # -- Pomakni se do kofera
+        gantry_pose = self.act.gantry_torso_state
+        if (gantry_orientation == "right"):
+            self.rm.move_torso([gantry_pose.desired.positions[0], gantry_pose.desired.positions[1] + 0.9,
+                                gantry_pose.desired.positions[2]])
+            self.rm.move_torso([gantry_pose.desired.positions[0], gantry_pose.desired.positions[1] + 0.9, pi / 2])
         else:
-            point2.positions = [-9 , 1.57, -2.9]
-        point2.time_from_start = rospy.Duration(3)
+            self.rm.move_torso([gantry_pose.desired.positions[0], gantry_pose.desired.positions[1] - 0.9,
+                                gantry_pose.desired.positions[2]])
+            self.rm.move_torso([gantry_pose.desired.positions[0], gantry_pose.desired.positions[1] - 0.9, pi / 2])
 
-        move_to.points.append(point)
-        move_to.points.append(point2)
-        self.gp.trajectory_publisher.publish(move_to)
+        # odi do assembly tocke
+        gantry_pose = self.act.gantry_torso_state
+        if "sensor" in ud.part.type:
+            self.rm.move_torso([gantry_pose.desired.positions[0] - 0.45, gantry_pose.desired.positions[1], pi / 2])
+        else:
+            self.rm.move_torso([gantry_pose.desired.positions[0] - 0.75, gantry_pose.desired.positions[1], pi / 2])
 
-        rospy.sleep(3.2)
-
-        # Stavi u kofer i makni se
+        # -- Stavi u kofer i makni se
         if 'pump' in ud.part.type:
-            self.rm.assemble_gantry('as2', ud.part.type, joints=1, offset=offset)
+            self.rm.assemble_gantry(ud.task.station_id, ud.part.type, joints=1, offset=offset, multiplier=multiplier)
         else:
-            self.rm.assemble_gantry('as2', ud.part.type, joints=1)
+            self.rm.assemble_gantry(ud.task.station_id, ud.part.type, joints=1, multiplier=multiplier)
         rospy.sleep(1.0)
         #self.ass.move_arm_to_home_position()
+
+        if ud.task.station_id == "as2" or ud.task.station_id == "as4":
+            self.rm.move_torso([-8.7, gantry_pose.desired.positions[1], pi / 2])
+        else:
+            self.rm.move_torso([-3.7, gantry_pose.desired.positions[1], pi / 2])
 
         counter += 1
         return 'moved'
@@ -375,13 +402,20 @@ class GantryGetTray(smach.State):
         return 'trayon'
 
 class FindPartInEnvironment(smach.State):
-    def __init__(self, sensors, outcomes=['found'], input_keys=['part'], output_keys=['partposition', 'partcurrentposition']):
+    def __init__(self, sensors, outcomes=['found', 'none'], input_keys=['task', 'part'], output_keys=['partposition', 'partcurrentposition']):
         smach.State.__init__(self, outcomes, input_keys, output_keys)
         self.sen = sensors
 
     def execute(self, ud):
         objects = self.sen.get_object_pose_in_workcell()
-        ud.partposition = ud.part.pose.position
+
+        pose_tray = self.sen.tf_transform(str("kit_tray_" + str((ud.task.agv)[-1])))
+        part_pose = Pose()
+        part_pose.position.x = ud.part.pose.position.x + pose_tray.position.x
+        part_pose.position.y = ud.part.pose.position.y + pose_tray.position.y
+        part_pose.position.z = ud.part.pose.position.z + pose_tray.position.z
+
+        ud.partposition = part_pose.position
         for product in objects:
             if product.pose.position.x < - 2.7:
                 print("ODBACUJEM OVAJ OBJEKT NA POZICIJI " + str(product.pose.position.x))
@@ -390,6 +424,7 @@ class FindPartInEnvironment(smach.State):
             if product.type == ud.part.type:
                 ud.partcurrentposition = product.pose.position
                 return 'found'
+            return 'none'
 
 class KittingRobotPickAndPlace(smach.State):
     def __init__(self, robotmover, sensors, outcomes=['success'], input_keys=['task', 'partposition', 'partcurrentposition']):
@@ -401,9 +436,11 @@ class KittingRobotPickAndPlace(smach.State):
         partcurrentpos = [ud.partcurrentposition.x, ud.partcurrentposition.y, ud.partcurrentposition.z, 0, pi/2, 0]
         pose_tray = self.sen.tf_transform(str("kit_tray_" + str((ud.task.agv)[-1])))
         part_pose = Pose()
+
         part_pose.position.x = ud.partposition.x + pose_tray.position.x
         part_pose.position.y = ud.partposition.y + pose_tray.position.y
         part_pose.position.z = ud.partposition.z + pose_tray.position.z
+
         partpos = [part_pose.position.x, part_pose.position.y, part_pose.position.z + 0.02, 0, pi/2, 0]
         self.rm.pickup_kitting(partcurrentpos)
         while not self.rm.kitting_pickedup:

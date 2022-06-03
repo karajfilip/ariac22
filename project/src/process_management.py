@@ -126,13 +126,13 @@ class process_management():
         except rospy.ServiceException as exc:
             rospy.logerr(str(exc))
     
-    def submit_assembly_shipment(self, station_id):
+    def submit_assembly_shipment(self, station_id, shipment_type):
         """ ROS Service for submit an assembly shipment."""
         rospy.wait_for_service('/ariac/' + station_id + '/submit_assembly_shipment')
         submit_assembly = rospy.ServiceProxy('/ariac/' + station_id + '/submit_assembly_shipment', AssemblyStationSubmitShipment)
 
         try:
-            resp = submit_assembly("order_0_assembly_shipment_0") # TODO FIX
+            resp = submit_assembly(shipment_type) # TODO FIX
             rospy.loginfo("Submitting an assemlby shipment.")
         except rospy.ServiceException as exc:
             rospy.logerr(str(exc))

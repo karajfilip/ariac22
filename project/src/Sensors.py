@@ -14,10 +14,17 @@ from geometry_msgs.msg import Pose, PoseArray
 from std_msgs.msg import Header
 
 
-class Sensors_functions():
+class Sensors_functions:
 
     def __init__(self):
+        self.bb1 = False
+        self.bb2 = False
+
+        rospy.Subscriber('/ariac/breakbeam_1_change', Proximity, self.break_beam_callback_1)
+        rospy.Subscriber('/ariac/breakbeam_2_change', Proximity, self.break_beam_callback_2)
+
         pass
+
     def tf_transform(self, frame):
         '''
         Get the world pose of object
@@ -107,7 +114,22 @@ class Sensors_functions():
             objects.append(model)
         return objects
 
-class Sensors_subscribers():
+    def break_beam_callback_1(self, msg):
+        ''' For human obstacle at as 2 '''
+        if msg.object_detected:
+            self.bb1 = True
+        else:
+            self.bb1 = False
+
+    def break_beam_callback_2(self, msg):
+        ''' For human obstacle at as 4 '''
+        if msg.object_detected:
+            self.bb2 = True
+        else:
+            self.bb2 = False
+
+
+class Sensors_subscribers:
 
     def __init__(self):
 
@@ -170,6 +192,19 @@ class Sensors_subscribers():
         if msg.object_detected:
             self.i += 1
             self.breakbeam_detection.update({self.i: msg.header.stamp})
+
+    def break_beam_callback_1(self, msg):
+        ''' For human obstacle at as 2 '''
+        if msg.object_detected:
+            self.bb1 = True
+        else:
+            self.bb1 = False
+    def break_beam_callback_2(self, msg):
+        ''' For human obstacle at as 4 '''
+        if msg.object_detected:
+            self.bb2 = True
+        else:
+            self.bb2 = False
 
     def logical_camera_1_callback(self, msg):
         ''' Callback function for logical camera
@@ -245,8 +280,8 @@ class Sensors_subscribers():
 
 
 
-if __name__ == '__main__':
-    subscribers = Sensors_subscribers()
+#if __name__ == '__main__':
+    #subscribers = Sensors_subscribers()
     #functions = Sensors_functions()
     #objects = functions.get_object_pose_in_workcell()
     #  faulty = functions.tf_transform("logical_camera_2_assembly_pump_red_1_frame")
