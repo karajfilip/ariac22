@@ -37,6 +37,7 @@ class RobotMover:
         self.watching_kitting = False
         self.kitting_pickedup = False
         self.gantry_pickedup = False
+        self.torso_moved = False
 
     # Ako se radi pickup, gledaj state grippera. Kad uhvati objekt, prestani micat robota
     def vacuum_kitting_state_cb(self, data):
@@ -201,6 +202,35 @@ class RobotMover:
 
         return trajectory_arm, trajectory_torso
 
+    ### Moving torso
+    def make_traj_torso(self, points_torso):
+
+        trajectory_torso = JointTrajectory()
+        trajectory_torso.joint_names = ["small_long_joint", "torso_rail_joint", "torso_base_main_joint"]
+        trajectory_torso.header.stamp = rospy.Time.now()
+
+        for point in points_torso:
+            trajectory_torso.points.append(point)
+
+        return trajectory_torso
+
+    def move_torso(self, position):
+     
+        self.torso_moved = False       
+        
+        gantry_pose = []
+        gantry_pose.append(position[0])
+        gantry_pose.append(position[1])
+        gantry_pose.append(position[2])
+
+        point = JointTrajectoryPoint()
+        point.positions = gantry_pose
+        point.time_from_start = rospy.Duration(2) 
+
+        trajectory_torso = self.make_traj_torso([point])
+
+        self.gantry_torso_cmd.publish(trajectory_torso)
+
     # Dohvaca trenutnu poziciju robota iz direktne kinematike
     # NE KORISTITI SAMO DIREKTNU JER POSTOJI SANSA DA CE FAILAT PA SE MORA POZVATI VISE PUTA DOK NE PRORADI
     def get_pos_kitting(self):
@@ -337,11 +367,9 @@ class RobotMover:
         print("KITTING_MOVER: Sent trajectory")
         while not self.check_kitting_position(end_pos, tolerance=0.015):
             rospy.sleep(0.2)
-            if not self.inverse_kin.is_object_attached_kitting().attached:
-                return False
         self.inverse_kin.deactivate_kitting_gripper()
         print("KITTING_MOVER: Let go")
-        return True
+        return
 
     # Gantry ima dodatnu varijablu joints, koja determinira koji dio gantry se treba pomaknuti. Za micanje samo baze koristi path_planner.py!!!
     # 0 - Cijeli gantry
