@@ -14,10 +14,16 @@ from geometry_msgs.msg import Pose, PoseArray
 from std_msgs.msg import Header
 
 
-class Sensors_functions():
+class Sensors_functions:
 
     def __init__(self):
-        pass
+        self.bb1 = False
+        self.bb2 = False
+
+        rospy.Subscriber('/ariac/breakbeam_1_change', Proximity, self.break_beam_callback_1)
+        rospy.Subscriber('/ariac/breakbeam_2_change', Proximity, self.break_beam_callback_2)
+
+
     def tf_transform(self, frame):
         '''
         Get the world pose of object
@@ -68,6 +74,12 @@ class Sensors_functions():
         tf_buffer = tf2_ros.Buffer()
         tf_listener = tf2_ros.TransformListener(tf_buffer)
 
+        # check if there is a sensor blackout
+        try:
+            print(rospy.wait_for_message("/ariac/breakbeam_0", Proximity, 1))
+        except:
+            return objects
+
         # wait for all cameras to be broadcasting
         all_topics = rospy.get_published_topics()
         #  NOTE: This will not work if your logical cameras are named differently
@@ -107,7 +119,21 @@ class Sensors_functions():
             objects.append(model)
         return objects
 
-class Sensors_subscribers():
+    def break_beam_callback_1(self, msg):
+        ''' For human obstacle at as 2 '''
+        if msg.object_detected:
+            self.bb1 = True
+        else:
+            self.bb1 = False
+
+    def break_beam_callback_2(self, msg):
+        ''' For human obstacle at as 4 '''
+        if msg.object_detected:
+            self.bb2 = True
+        else:
+            self.bb2 = False
+
+class Sensors_subscribers:
 
     def __init__(self):
 
@@ -119,8 +145,6 @@ class Sensors_subscribers():
         self.i = 0
         self.track_items_pose = PoseArray()
         self.faulty = [False]*4
-        self.bb1 = False
-        self.bb2 = False
 
         # Velocity of track in m/s
         self.v = 0.2
@@ -133,8 +157,6 @@ class Sensors_subscribers():
         # Each sensor has its own subscriber
         # Break Beam Sensor
         rospy.Subscriber('/ariac/breakbeam_0_change', Proximity, self.break_beam_callback)
-        rospy.Subscriber('/ariac/breakbeam_1_change', Proximity, self.break_beam_1_callback)
-        rospy.Subscriber('/ariac/breakbeam_2_change', Proximity, self.break_beam_2_callback)
 
         # Logical Camera
         rospy.Subscriber('/ariac/logical_camera_1', LogicalCameraImage, self.logical_camera_1_callback)
@@ -174,20 +196,6 @@ class Sensors_subscribers():
         if msg.object_detected:
             self.i += 1
             self.breakbeam_detection.update({self.i: msg.header.stamp})
-
-    def break_beam_callback_1(self, msg):
-        ''' For human obstacle at as 2 '''
-        if msg.object_detected:
-            self.bb1 = True
-        else:
-            self.bb1 = False
-
-    def break_beam_callback_2(self, msg):
-        ''' For human obstacle at as 4 '''
-        if msg.object_detected:
-            self.bb2 = True
-        else:
-            self.bb2 = False
 
     def logical_camera_1_callback(self, msg):
         ''' Callback function for logical camera
@@ -263,12 +271,9 @@ class Sensors_subscribers():
 
 
 
-if __name__ == '__main__':
+#if __name__ == '__main__':
     #subscribers = Sensors_subscribers()
-    rospy.init_node('test')
-    functions = Sensors_functions()
+    #functions = Sensors_functions()
     #objects = functions.get_object_pose_in_workcell()
     #  faulty = functions.tf_transform("logical_camera_2_assembly_pump_red_1_frame")
     #print(functions.tf_transform("kit_tray_1"))
-    objects = functions.get_object_pose_in_workcell(5);
-    print(objects)
