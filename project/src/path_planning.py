@@ -5,6 +5,7 @@ from trajectory_msgs.msg import JointTrajectoryPoint
 from control_msgs.msg import JointTrajectoryControllerState
 from geometry_msgs.msg import Pose
 import math
+from copy import deepcopy
 
 
 # TOCKE NA KOJE TREBA DOC
@@ -35,9 +36,9 @@ class GantryPlanner:
         self.pos_subscriber       = rospy.Subscriber("/ariac/gantry/gantry_controller/state", JointTrajectoryControllerState, self.position_cb, queue_size=1)
         self.trajectory_publisher = rospy.Publisher("/ariac/gantry/gantry_controller/command", JointTrajectory, queue_size=1)
         
-        self.wanted_pos = [0,0,0]
-        self.received_pos = [0,0,0]
-        self.current_station = 11
+        self.wanted_pos = [0,0,0];
+        self.received_pos = [0,0,0];
+        self.current_station = 11;
 
         self.stations = [ [],
                          [  -3.7 , math.pi/2, -3],
@@ -87,7 +88,7 @@ class GantryPlanner:
         elif (station == 'home'):
             station_number = 11
 
-        print("PATH_PLANNER: MICEM GANTRY NA STATION " + str(station_number))
+        print("PATH_PLANNER: MICEM GANTRY NA STATION " + str(station_number) + " SA STATIONA " + str(self.current_station))
 
         if self.current_station == station_number:
             print("PATH_PLANNER: GANTRY VEC NA STATIONU " + str(self.current_station))
@@ -103,21 +104,21 @@ class GantryPlanner:
         if self.current_station != 11:
             if self.current_station not in [5,6,7,8,9,10]:
                 point_move_away = JointTrajectoryPoint()
-                point_move_away.positions = self.stations[self.current_station]
+                point_move_away.positions = deepcopy(self.stations[self.current_station])
                 point_move_away.positions[0] += 0.5
                 point_move_away.time_from_start = used_time + rospy.Duration(0.8)
                 used_time = point_move_away.time_from_start
                 move_to.points.append(point_move_away)
             elif self.current_station in [5,6]:
                 point_move_away = JointTrajectoryPoint()
-                point_move_away.positions = self.stations[self.current_station]
+                point_move_away.positions = deepcopy(self.stations[self.current_station])
                 point_move_away.positions[2] += 1.5
                 point_move_away.time_from_start = used_time + rospy.Duration(0.8)
                 used_time = point_move_away.time_from_start
                 move_to.points.append(point_move_away)
             else:
                 point_move_away = JointTrajectoryPoint()
-                point_move_away.positions = self.stations[self.current_station]
+                point_move_away.positions = deepcopy(self.stations[self.current_station])
                 point_move_away.positions[0] -= 1.5
                 point_move_away.time_from_start = used_time + rospy.Duration(1.0)
                 used_time = point_move_away.time_from_start
@@ -144,13 +145,13 @@ class GantryPlanner:
                     used_time = points_change_row.time_from_start
 
                 points_change_row = JointTrajectoryPoint()
-                points_change_row.positions = [-7.6, self.stations[self.current_station][1], 0]
-                points_change_row.time_from_start = used_time + rospy.Duration(3.5)
+                points_change_row.positions = [-8, self.stations[self.current_station][1], 0]
+                points_change_row.time_from_start = used_time + rospy.Duration(2.5)
                 move_to.points.append(points_change_row)
                 used_time = points_change_row.time_from_start
 
                 points.positions = self.stations[station_number]
-                points.time_from_start = used_time + rospy.Duration(2.5)
+                points.time_from_start = used_time + rospy.Duration(2)
                 used_time = points.time_from_start
 
         else:
@@ -160,8 +161,8 @@ class GantryPlanner:
                 used_time = points.time_from_start 
             else:
                 points_change_row = JointTrajectoryPoint()
-                points_change_row.positions = [-7.8, self.stations[self.current_station][1], 0]
-                points_change_row.time_from_start = used_time + rospy.Duration(3.5)
+                points_change_row.positions = [-8, self.stations[self.current_station][1], 0]
+                points_change_row.time_from_start = used_time + rospy.Duration(1.5)
                 move_to.points.append(points_change_row)
                 used_time = points_change_row.time_from_start
 
@@ -198,6 +199,8 @@ class GantryPlanner:
 
         move_to.points.append(points)
 
+
+
         # -- Logika gotova. Salji robotu pomak --
         self.wanted_pos = points.positions
         self.current_station = station_number
@@ -218,6 +221,8 @@ class GantryPlanner:
             if abs(x - robx) < tolerance:
                 if abs(y - roby) < tolerance:
                     if abs(z - robz) < tolerance:
+                        print(x,y,z)
+                        print(data.actual)
                         self.checking_position = False
                         print("PATH_PLANNER: ARRIVED")
         return
@@ -228,5 +233,6 @@ class GantryPlanner:
             return True
         else:
             return False
+
 
 

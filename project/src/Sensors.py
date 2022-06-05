@@ -23,7 +23,6 @@ class Sensors_functions:
         rospy.Subscriber('/ariac/breakbeam_1_change', Proximity, self.break_beam_callback_1)
         rospy.Subscriber('/ariac/breakbeam_2_change', Proximity, self.break_beam_callback_2)
 
-        pass
 
     def tf_transform(self, frame):
         '''
@@ -74,6 +73,12 @@ class Sensors_functions:
         '''
         tf_buffer = tf2_ros.Buffer()
         tf_listener = tf2_ros.TransformListener(tf_buffer)
+
+        # check if there is a sensor blackout
+        try:
+            print(rospy.wait_for_message("/ariac/breakbeam_0", Proximity, 1))
+        except:
+            return objects
 
         # wait for all cameras to be broadcasting
         all_topics = rospy.get_published_topics()
@@ -127,7 +132,6 @@ class Sensors_functions:
             self.bb2 = True
         else:
             self.bb2 = False
-
 
 class Sensors_subscribers:
 
@@ -192,19 +196,6 @@ class Sensors_subscribers:
         if msg.object_detected:
             self.i += 1
             self.breakbeam_detection.update({self.i: msg.header.stamp})
-
-    def break_beam_callback_1(self, msg):
-        ''' For human obstacle at as 2 '''
-        if msg.object_detected:
-            self.bb1 = True
-        else:
-            self.bb1 = False
-    def break_beam_callback_2(self, msg):
-        ''' For human obstacle at as 4 '''
-        if msg.object_detected:
-            self.bb2 = True
-        else:
-            self.bb2 = False
 
     def logical_camera_1_callback(self, msg):
         ''' Callback function for logical camera
