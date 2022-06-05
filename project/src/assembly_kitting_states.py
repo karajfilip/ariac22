@@ -580,9 +580,13 @@ class KittingRobotPickAndPlace(smach.State):
         diff_x = ud.partpose.orientation.x - ud.partcurrentpose.orientation.x
         diff_y = ud.partpose.orientation.y - ud.partcurrentpose.orientation.y
         diff_z = ud.partpose.orientation.z - ud.partcurrentpose.orientation.z
+        print("diffovi:")
+        print(diff_x)
+        print(diff_y)
+        print(diff_z)
         partcurrentpos = [ud.partcurrentpose.position.x, ud.partcurrentpose.position.y, ud.partcurrentpose.position.z, 0, pi/2, 0] 
-        partpos = [ud.partpose.position.x, ud.partpose.position.y, ud.partpose.position.z + 0.02, 0+diff_x, pi/2, 0+diff_z]  
-        self.rm.pickup_kitting(partcurrentpos)
+        partpos = [ud.partpose.position.x, ud.partpose.position.y, ud.partpose.position.z + 0.02, 0, pi/2, 0]  
+        self.rm.pickup_kitting(partcurrentpos, ud.part.type)
         while not self.rm.kitting_pickedup: 
             rospy.sleep(0.2) 
         if not self.rm.inverse_kin.is_object_attached_kitting().attached: 
@@ -688,16 +692,18 @@ class WaitConveyorBelt(smach.State):
         self.trackindex = 0
 
     def execute(self, ud):
-        while self.trackindex > self.poselen:
+        while self.trackindex >= self.poselen:
             if self.preempt_requested():
                 self.service_preempt()
                 rospy.logwarn('PREEMPTED')
                 return 'preempted'
         self.trackindex += 1
+        
         return 'ontrack'
     
     def cb(self, msg):
         self.poselen = len(msg.poses)
+
     
 class PickFromConveyor(smach.State):
     def __init__(self, robotmover, actuators, outcomes=['next', 'preempted'], input_keys=['task']):

@@ -138,6 +138,7 @@ class Sensors_subscribers:
     def __init__(self):
 
         rospy.init_node('sensors_subscribers', anonymous=True)
+        rospy.wait_for_message('/ariac/logical_camera_8', LogicalCameraImage)
         # Data from sensors
         # self.data = {}
         self.breakbeam_detection = {}

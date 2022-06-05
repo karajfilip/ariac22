@@ -10,6 +10,7 @@ from control_msgs.msg import JointTrajectoryControllerState
 from Actuators import Actuators
 from nist_gear.msg import VacuumGripperState
 from geometry_msgs.msg import Pose, PoseArray
+import copy
 
 # PROBAJ POSLATI NA OVU TOCKU
 # [3.1886361434562973,
@@ -161,7 +162,6 @@ class RobotMover:
         arm_joints = joint_point[3:-1]
         torso_joints = joint_point[0:3]
         del arm_joints[-1]
-        del arm_joints[-1]
 
         point_arm = JointTrajectoryPoint()
         point_arm.positions = arm_joints
@@ -263,7 +263,7 @@ class RobotMover:
     # Pickup pomice robota pazljivo na poziciju, te zatim prima predmet
     # Place radi isto, samo spusta objekt na neku lokaciju. Baca warning ako robot nema nista gripanog.
     # Position = [x,y,z, roll, pitch, yaw]
-    def pickup_kitting(self, position):
+    def pickup_kitting(self, position, object_name = "xsxsxs"):
         # Razvrsti putanju na tri tocke:
         # 1) Okreni elbow_joint za 0.3 rad, tako ce se ruka dici od trenutne pozicije
         # 2) Pomakni robota 0.5 iznad objekta
@@ -313,10 +313,17 @@ class RobotMover:
         p3, used_time = self.add_point_kitting(close_to_end, used_time=used_time, point_time=1, prev_joints=None)
 
 
-        end_pos = close_to_end
-        end_pos[2] = close_to_end[2] - 0.05
-        p4, used_time = self.add_point_kitting(end_pos, used_time=used_time, point_time=4, prev_joints=p3.positions)
-        trajectory2 = self.make_traj_kitting([p3, p4])
+        if "pump" in object_name:
+            end_pos = close_to_end
+            end_pos[2] = close_to_end[2] - 0.03
+            p4, used_time = self.add_point_kitting(end_pos, used_time=used_time, point_time=4, prev_joints=p3.positions)
+            trajectory2 = self.make_traj_kitting([p3, p4])
+
+        else:
+            end_pos = close_to_end
+            end_pos[2] = close_to_end[2] - 0.05
+            p4, used_time = self.add_point_kitting(end_pos, used_time=used_time, point_time=4, prev_joints=p3.positions)
+            trajectory2 = self.make_traj_kitting([p3, p4])
 
         self.kitting_cmd.publish(trajectory2)
         print("KITTING_MOVER: Sent second")
@@ -369,7 +376,7 @@ class RobotMover:
                 return False
         self.inverse_kin.deactivate_kitting_gripper()
         print("KITTING_MOVER: Let go")
-        return
+        return True
 
     # Gantry ima dodatnu varijablu joints, koja determinira koji dio gantry se treba pomaknuti. Za micanje samo baze koristi path_planner.py!!!
     # 0 - Cijeli gantry
@@ -502,9 +509,12 @@ class RobotMover:
         self.gantry_cmd.publish(ta)
         print("GANTRY_MOVER: Sent first")
 
+        i = 85 # wait for 8.5 seconds
         while not self.check_gantry_position(above_end, tolerance=tolerance):
-            #print("trying to reach end position")
             rospy.sleep(0.1)
+            i -= 1
+            if i == 0: # if not placed within 8.5 seconds, ABORT
+                break
         self.inverse_kin.deactivate_gantry_gripper()
         print("GANTRY_MOVER: Let go")
         return
@@ -673,6 +683,13 @@ class RobotMover:
         rospy.sleep(0.2)
         change_t = False
         offset_change_limit = 10
+
+        i = 0
+        for track_pos in self.track_poses.poses:
+            i += 1
+            if track_pos.position.y > 1.5:
+                pose_array_i = i
+
         while not self.track_poses.poses:
             rospy.sleep(0.01)
         current_pose = self.track_poses.poses[pose_array_i].position
@@ -785,6 +802,7 @@ class RobotMover:
         self.flip_num += 1
         x_offset = 0
         y_offset = 0
+        position[2] += 0.04
         if self.flip_num == 1:
             rospy.logwarn("New pick up")
             rospy.logwarn(position)

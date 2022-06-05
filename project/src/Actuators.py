@@ -159,6 +159,13 @@ class Actuators():
             return penalty
         else:
             return 0
+            
+    def rotation_kitting_arm(self):
+        ee_pose = self.kitting_group.get_current_pose().pose
+
+        direct_kin = [ee_pose.orientation.x, ee_pose.orientation.y, ee_pose.orientation.z, ee_pose.orientation.w]
+
+        return direct_kin
 
     def fix_joints_kitting(self, wanted_joints, curr_joints):
         if curr_joints == None:
