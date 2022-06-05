@@ -38,6 +38,7 @@ include_directories(include ${catkin_INCLUDE_DIRS})
 ## Mark executable scripts (Python etc.) for installation
 install(PROGRAMS
   src/main_sm.py
+  src/Sensors.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
@@ -56,10 +57,9 @@ install(PROGRAMS
 # )
 
 ## Mark other files for installation (e.g. launch and bag files, etc.)
-install(FILES
- config/sample_gear_conf.yaml
- DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/config
-)
+install(DIRECTORY config launch
+        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+        )
 
 #############
 ## Testing ##

@@ -686,9 +686,10 @@ class RobotMover:
 
         i = 0
         for track_pos in self.track_poses.poses:
-            i += 1
+            
             if track_pos.position.y > 1.5:
                 pose_array_i = i
+            i += 1
 
         while not self.track_poses.poses:
             rospy.sleep(0.01)
@@ -753,7 +754,7 @@ class RobotMover:
                         y_offset = -0.035
             # print("offset=" + str(z_offset))
 
-            diff = math.sqrt((kpos[1] - current_position[1]) * 2 + (kpos[2] - current_position[2]) * 2)
+            diff = math.sqrt((kpos[1] - current_position[1]) ** 2 + (kpos[2] - current_position[2]) ** 2)
             t = diff / 0.4
             if t > 0.8:
                 t = 0.5

@@ -24,7 +24,7 @@ class CheckToRemove(smach.State):
         return 'continue'
 
 class RemovePart(smach.State):
-    def __init__(self, processmgmt, robotmover, sensors, outcomes=['removed', 'preempted'], input_keys=['positiontoremove']):
+    def __init__(self, processmgmt, robotmover, sensors, outcomes=['removed', 'preempted', 'broken'], input_keys=['positiontoremove']):
         smach.State.__init__(self, outcomes, input_keys) 
         self.node = processmgmt   
         self.rm = robotmover    
@@ -35,6 +35,8 @@ class RemovePart(smach.State):
             self.service_preempt()
             rospy.logwarn('PREEMPTED')
             return 'preempted'
+        if self.rm.inverse_kin.robot_health.kitting_robot_health != 'active':
+            return 'broken'
         partcurrentpos = [ud.positiontoremove.x, ud.positiontoremove.y, ud.positiontoremove.z, 0, pi/2, 0] 
         partpos = [-1.898993, -2.565006, 0.8 + 0.02, 0, pi/2, 0]  
         self.rm.pickup_kitting(partcurrentpos)
@@ -552,7 +554,8 @@ class FindPartInEnvironment(smach.State):
                 print("ODBACUJEM OVAJ OBJEKT NA POZICIJI " + str(product.pose.position.x))  
                 continue    
             if product.type == ud.part.type:    
-                ud.partcurrentpose = product.pose  
+                ud.partcurrentpose = product.pose
+                self.sen.objects.remove(product)  
                 return 'found'  
         for agv in self.node.placed:
             for product_type, position, pose in self.node.placed[agv]:
@@ -566,7 +569,7 @@ class FindPartInEnvironment(smach.State):
         return 'none'
 
 class KittingRobotPickAndPlace(smach.State):
-    def __init__(self, processmgmt, robotmover, sensors, outcomes=['success', 'lost', 'preempted'], input_keys=['task', 'partpose', 'partcurrentpose', 'part']):
+    def __init__(self, processmgmt, robotmover, sensors, outcomes=['success', 'lost', 'preempted', 'broken'], input_keys=['task', 'partpose', 'partcurrentpose', 'part']):
         smach.State.__init__(self, outcomes, input_keys)
         self.rm = robotmover
         self.sen = sensors
@@ -577,6 +580,8 @@ class KittingRobotPickAndPlace(smach.State):
             self.service_preempt()
             rospy.logwarn('PREEMPTED')
             return 'preempted'
+        if self.rm.inverse_kin.robot_health.kitting_robot_health != 'active':
+            return 'broken'
         diff_x = ud.partpose.orientation.x - ud.partcurrentpose.orientation.x
         diff_y = ud.partpose.orientation.y - ud.partcurrentpose.orientation.y
         diff_z = ud.partpose.orientation.z - ud.partcurrentpose.orientation.z
@@ -602,7 +607,7 @@ class KittingRobotPickAndPlace(smach.State):
         return 'success'
 
 class FaultyPickAndPlace(smach.State):    
-    def __init__(self, processmgmt, robotmover, sensors, outcomes=['success', 'lost', 'preempted'], input_keys=['task', 'partpose', 'partcurrentpose', 'part']):  
+    def __init__(self, processmgmt, robotmover, sensors, outcomes=['success', 'lost', 'preempted', 'broken'], input_keys=['task', 'partpose', 'partcurrentpose', 'part']):  
         smach.State.__init__(self, outcomes, input_keys) 
         self.node = processmgmt   
         self.rm = robotmover    
@@ -613,6 +618,8 @@ class FaultyPickAndPlace(smach.State):
             self.service_preempt()
             rospy.logwarn('PREEMPTED')
             return 'preempted'
+        if self.rm.inverse_kin.robot_health.kitting_robot_health != 'active':
+            return 'broken'
         diff_x = ud.partpose.orientation.x - ud.partcurrentpose.orientation.x
         diff_y = ud.partpose.orientation.y - ud.partcurrentpose.orientation.y
         diff_z = ud.partpose.orientation.z - ud.partcurrentpose.orientation.z
@@ -697,13 +704,13 @@ class WaitConveyorBelt(smach.State):
                 self.service_preempt()
                 rospy.logwarn('PREEMPTED')
                 return 'preempted'
+        print(self.poselen, self.trackindex)
         self.trackindex += 1
         
         return 'ontrack'
     
     def cb(self, msg):
         self.poselen = len(msg.poses)
-
     
 class PickFromConveyor(smach.State):
     def __init__(self, robotmover, actuators, outcomes=['next', 'preempted'], input_keys=['task']):

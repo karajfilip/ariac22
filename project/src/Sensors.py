@@ -19,6 +19,7 @@ class Sensors_functions:
     def __init__(self):
         self.bb1 = False
         self.bb2 = False
+        self.objects = list()
 
         rospy.Subscriber('/ariac/breakbeam_1_change', Proximity, self.break_beam_callback_1)
         rospy.Subscriber('/ariac/breakbeam_2_change', Proximity, self.break_beam_callback_2)
@@ -78,7 +79,7 @@ class Sensors_functions:
         try:
             print(rospy.wait_for_message("/ariac/breakbeam_0", Proximity, 1))
         except:
-            return objects
+            return self.objects
 
         # wait for all cameras to be broadcasting
         all_topics = rospy.get_published_topics()
@@ -116,8 +117,9 @@ class Sensors_functions:
             model.type = re.match(camera_frame_format, frame).group(1)
             model.pose.position = world_tf.transform.translation
             model.pose.orientation = world_tf.transform.rotation
-            objects.append(model)
-        return objects
+            if model not in self.objects:
+                self.objects.append(model)
+        return self.objects
 
     def break_beam_callback_1(self, msg):
         ''' For human obstacle at as 2 '''
@@ -137,7 +139,7 @@ class Sensors_subscribers:
 
     def __init__(self):
 
-        rospy.init_node('sensors_subscribers', anonymous=True)
+        
         rospy.wait_for_message('/ariac/logical_camera_8', LogicalCameraImage)
         # Data from sensors
         # self.data = {}
@@ -187,8 +189,9 @@ class Sensors_subscribers:
                 self.track_items_pose.poses.append(
                     self.position_on_track(value.to_nsec(), rospy.get_rostime().to_nsec()))
             self.pub_pose_on_track.publish(self.track_items_pose)
-            print(self.track_items_pose)
+            # print(self.track_items_pose)
             rospy.sleep(0.01)
+        rospy.spin()
 
     ### CALLBACKS ###
     def break_beam_callback(self, msg):
@@ -272,9 +275,10 @@ class Sensors_subscribers:
 
 
 
-#if __name__ == '__main__':
-    #subscribers = Sensors_subscribers()
-    #functions = Sensors_functions()
+if __name__ == '__main__':
+    rospy.init_node('sensors_subscribers', anonymous=True)
+    subscribers = Sensors_subscribers()
+    # functions = Sensors_functions()
     #objects = functions.get_object_pose_in_workcell()
     #  faulty = functions.tf_transform("logical_camera_2_assembly_pump_red_1_frame")
     #print(functions.tf_transform("kit_tray_1"))
