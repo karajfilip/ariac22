@@ -93,7 +93,7 @@ class Sensors_functions:
         all_frames = yaml.safe_load(tf_buffer.all_frames_as_yaml()).keys()
         part_frames = [f for f in all_frames if re.match(camera_frame_format, f)]
 
-        objects = []
+        self.objects = []
         for frame in part_frames:
             try:
                 world_tf = tf_buffer.lookup_transform(
@@ -117,8 +117,7 @@ class Sensors_functions:
             model.type = re.match(camera_frame_format, frame).group(1)
             model.pose.position = world_tf.transform.translation
             model.pose.orientation = world_tf.transform.rotation
-            if model not in self.objects:
-                self.objects.append(model)
+            self.objects.append(model)
         return self.objects
 
     def break_beam_callback_1(self, msg):
