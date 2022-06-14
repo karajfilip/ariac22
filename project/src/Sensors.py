@@ -8,7 +8,8 @@ import yaml
 import re
 
 # Break Beam Sensor, Quality Control Sensor and Logical Camera messages
-from nist_gear.msg import Proximity, LogicalCameraImage, Model
+#from nist_gear.msg import Proximity, LogicalCameraImage, Model
+from nist_gear.msg import *
 
 from geometry_msgs.msg import Pose, PoseArray
 from std_msgs.msg import Header
@@ -187,7 +188,7 @@ class Sensors_subscribers:
                 self.track_items_pose.poses.append(
                     self.position_on_track(value.to_nsec(), rospy.get_rostime().to_nsec()))
             self.pub_pose_on_track.publish(self.track_items_pose)
-            print(self.track_items_pose)
+            #print(self.track_items_pose)
             rospy.sleep(0.01)
 
     ### CALLBACKS ###

@@ -2,7 +2,8 @@ import rospy
 import smach
 from geometry_msgs.msg import Pose, PoseArray
 from math import pi
-from nist_gear.msg import LogicalCameraImage
+#from nist_gear.msg import LogicalCameraImage
+from nist_gear.msg import *
 from trajectory_msgs.msg import JointTrajectory
 from trajectory_msgs.msg import JointTrajectoryPoint
 
@@ -166,9 +167,10 @@ class FindPartOnTray(smach.State):
                 camera2 = 7
 
             ud.partcurrentpose = Pose()
-            self.objects = self.sen.get_object_pose_in_workcell(camera1)
-            self.objects2 = self.sen.get_object_pose_in_workcell(camera2)
-            self.objects = self.objects + self.objects2
+            cameras = [camera1, camera2]
+            self.objects = self.sen.get_object_pose_in_workcell(str(cameras))
+            #self.objects2 = self.sen.get_object_pose_in_workcell(camera2)
+            #self.objects = self.objects + self.objects2
             print(self.objects)
             for product in self.objects:
                 if product.type == ud.part.type:
@@ -539,8 +541,8 @@ class FindPartInEnvironment(smach.State):
             rospy.logwarn('PREEMPTED')
             return 'preempted'
         
-        objects = self.sen.get_object_pose_in_workcell(2)
-        objects.extend(self.sen.get_object_pose_in_workcell(3))
+        objects = self.sen.get_object_pose_in_workcell("[2,3]") 
+        #objects.extend(self.sen.get_object_pose_in_workcell(3))
         
 
         pose_tray = self.sen.tf_transform(str("kit_tray_" + str((ud.task.agv)[-1])))    
@@ -582,7 +584,7 @@ class KittingRobotPickAndPlace(smach.State):
             rospy.logwarn('PREEMPTED')
             return 'preempted'
 
-        if self.rm.inverse_kin.robot_health.kitting_robot_health != 'active':
+        if self.rm.inverse_kin.robot_health.kitting_robot_health == 'inactive':
             return 'broken'
 
         diff_x = ud.partpose.orientation.x - ud.partcurrentpose.orientation.x
@@ -617,7 +619,7 @@ class FaultyPickAndPlace(smach.State):
             self.service_preempt()
             rospy.logwarn('PREEMPTED')
             return 'preempted'
-        if self.rm.inverse_kin.robot_health.kitting_robot_health != 'active':
+        if self.rm.inverse_kin.robot_health.kitting_robot_health != 'active': # TODO
             return 'broken'
 
         diff_x = ud.partpose.orientation.x - ud.partcurrentpose.orientation.x
@@ -699,7 +701,7 @@ class WaitConveyorBelt(smach.State):
         self.trackindex = 0
 
     def execute(self, ud):
-        while self.trackindex > self.poselen:
+        while self.trackindex >= self.poselen:
             if self.preempt_requested():
                 self.service_preempt()
                 rospy.logwarn('PREEMPTED')
